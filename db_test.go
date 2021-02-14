@@ -7,7 +7,8 @@ import (
 )
 
 func TestPut(t *testing.T) {
-	mq := NewMQ()
-	err := mq.Push("foo", []byte("fooo"))
+	mq, err := NewDB("data")
+	assert.Nil(t, err)
+	err = mq.Put("foo", []byte("fooo"))
 	assert.Nil(t, err)
 }

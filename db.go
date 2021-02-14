@@ -104,18 +104,22 @@ func NewDataFile(path string) (DataFile, error) {
 
 }
 
-type MQ struct {
+type DB struct {
 	df DataFile
 }
 
-func NewMQ() MQ {
-	df, _ := NewDataFile("datafile")
-	return MQ{
-		df: df,
+func NewDB(datadir string) (*DB, error) {
+	err := os.MkdirAll(datadir, 0755)
+	if err != nil {
+		return nil, err
 	}
+	df, _ := NewDataFile("datafile")
+	return &DB{
+		df: df,
+	}, nil
 }
 
-func (mq *MQ) Push(key string, value []byte) error {
+func (mq *DB) Put(key string, value []byte) error {
 	e := NewEntry(key, value)
 	err := mq.df.Write(&e)
 	return err

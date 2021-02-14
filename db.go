@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"hash/crc32"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -113,7 +114,7 @@ func NewDB(datadir string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	df, _ := NewDataFile("datafile")
+	df, _ := NewDataFile(filepath.Join(datadir, "datafile"))
 	return &DB{
 		df: df,
 	}, nil

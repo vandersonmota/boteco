@@ -11,4 +11,6 @@ func TestPut(t *testing.T) {
 	assert.Nil(t, err)
 	err = mq.Put("foo", []byte("fooo"))
 	assert.Nil(t, err)
+	err = mq.Put("foo", []byte("bar"))
+	assert.Nil(t, err)
 }

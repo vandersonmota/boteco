@@ -15,6 +15,34 @@ const (
 	timestampSize = 8
 )
 
+type Item struct {
+	fileID int
+	offset int
+	size   int
+}
+
+type KeyDir struct {
+	m map[string]Item // TODO: not thread safe
+}
+
+func (kd *KeyDir) Get(key string) Item {
+	item, exists := kd.m[key]
+
+	if !exists {
+		return Item{}
+	}
+
+	return item
+}
+
+func (kd *KeyDir) Set(key string, offset, size int) {
+	kd.m[key] = Item{
+		fileID: 0,
+		offset: offset,
+		size:   size,
+	}
+}
+
 type Entry struct {
 	checksum  uint32
 	tstamp    uint64
@@ -49,7 +77,8 @@ type DataFile interface {
 	Id() int
 	Name() string
 	Offset() int
-	Write(e *Entry) error
+	Write(e *Entry) (int, error)
+	ReadEntry(Item) (Entry, error)
 }
 
 type datafile struct {
@@ -71,24 +100,33 @@ func (d *datafile) Offset() int {
 	return d.offset
 }
 
-func (d *datafile) Write(entry *Entry) error {
+func (d *datafile) Write(entry *Entry) (int, error) {
 	headers, key, value := entry.Encode()
-	_, err := d.fd.Write(headers)
+	bytesWritten := 0
+	n, err := d.fd.Write(headers)
 	if err != nil {
 		// TODO: log
-		return err
+		return 0, err
 	}
-	_, err = d.fd.Write(key)
+	bytesWritten += n
+	n, err = d.fd.Write(key)
 	if err != nil {
 		// TODO: log
-		return err
+		return 0, err
 	}
-	_, err = d.fd.Write(value)
+	bytesWritten += n
+	n, err = d.fd.Write(value)
 	if err != nil {
 		// TODO: log
-		return err
+		return 0, err
 	}
-	return nil
+	bytesWritten += n
+
+	return bytesWritten, nil
+}
+
+func (d *datafile) ReadEntry(item Item) (Entry, error) {
+	return Entry{}, nil
 }
 
 func NewDataFile(path string) (DataFile, error) {
@@ -107,6 +145,7 @@ func NewDataFile(path string) (DataFile, error) {
 
 type DB struct {
 	df DataFile
+	kd KeyDir
 }
 
 func NewDB(datadir string) (*DB, error) {
@@ -122,6 +161,14 @@ func NewDB(datadir string) (*DB, error) {
 
 func (mq *DB) Put(key string, value []byte) error {
 	e := NewEntry(key, value)
-	err := mq.df.Write(&e)
+	bytesWritten, err := mq.df.Write(&e)
+	mq.kd.Set(key, mq.df.Offset(), bytesWritten)
+	return err
+}
+
+func (mq *DB) Get(key string) ([]byte, error) {
+	item := mq.kd.Get(key)
+	entry, err := mq.df.ReadEntry(item)
+
 	return err
 }

@@ -143,6 +143,12 @@ func NewDataFile(path string) (DataFile, error) {
 
 }
 
+func BuildKeyDir() (KeyDir, error) {
+	return KeyDir{
+		m: map[string]Item{},
+	}, nil
+}
+
 type DB struct {
 	df DataFile
 	kd KeyDir
@@ -153,9 +159,17 @@ func NewDB(datadir string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	df, _ := NewDataFile(filepath.Join(datadir, "datafile"))
+	df, err := NewDataFile(filepath.Join(datadir, "datafile"))
+	if err != nil {
+		return &DB{}, err
+	}
+	kd, err := BuildKeyDir()
+	if err != nil {
+		return &DB{}, err
+	}
 	return &DB{
 		df: df,
+		kd: kd,
 	}, nil
 }
 
@@ -169,6 +183,9 @@ func (mq *DB) Put(key string, value []byte) error {
 func (mq *DB) Get(key string) ([]byte, error) {
 	item := mq.kd.Get(key)
 	entry, err := mq.df.ReadEntry(item)
+	if err != nil {
+		return make([]byte, 0), err
+	}
 
-	return err
+	return entry.value, err
 }

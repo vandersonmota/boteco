@@ -19,6 +19,7 @@ func TestGet(t *testing.T) {
 	assert.Nil(t, err)
 	err = mq.Put("foo", []byte("fooo"))
 	assert.Nil(t, err)
-	val := mq.Get("foo")
-	assert.Equal(t, val, "foo")
+	val, err := mq.Get("foo")
+	assert.Nil(t, err)
+	assert.Equal(t, val, []byte("foo"))
 }

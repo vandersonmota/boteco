@@ -2,6 +2,7 @@ package potatomq
 
 import (
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 	"os"
 	"path/filepath"
@@ -130,12 +131,13 @@ func (d *datafile) ReadEntry(item Item) (Entry, error) {
 }
 
 func NewDataFile(path string) (DataFile, error) {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 660)
+	fileName := int(time.Now().UnixNano())
+	f, err := os.OpenFile(filepath.Join(path, fmt.Sprint(fileName)), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 660)
 	if err != nil {
 		return nil, err
 	}
 	return &datafile{
-		id:     0, // TODO: dynamic ids
+		id:     fileName, // TODO: maybe uuids?
 		fd:     f,
 		offset: 0, // TODO change it
 		name:   path,
@@ -159,7 +161,7 @@ func NewDB(datadir string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	df, err := NewDataFile(filepath.Join(datadir, "datafile"))
+	df, err := NewDataFile(datadir)
 	if err != nil {
 		return &DB{}, err
 	}

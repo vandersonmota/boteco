@@ -36,9 +36,9 @@ func (kd *KeyDir) Get(key string) Item {
 	return item
 }
 
-func (kd *KeyDir) Set(key string, offset, size int) {
+func (kd *KeyDir) Set(key string, offset, size, fileID int) {
 	kd.m[key] = Item{
-		fileID: 0,
+		fileID: fileID,
 		offset: offset,
 		size:   size,
 	}
@@ -57,8 +57,8 @@ func (e *Entry) Encode() (headers, key, value []byte) {
 	buffer := make([]byte, checksumSize+timestampSize+keySize+valueSize)
 	binary.BigEndian.PutUint32(buffer[:checksumSize], e.checksum)
 	binary.BigEndian.PutUint64(buffer[checksumSize:checksumSize+timestampSize], e.tstamp)
-	binary.BigEndian.PutUint32(buffer[timestampSize:checksumSize+timestampSize+keySize], e.keySize)
-	binary.BigEndian.PutUint32(buffer[keySize:checksumSize+timestampSize+keySize+valueSize], e.valueSize)
+	binary.BigEndian.PutUint32(buffer[checksumSize+timestampSize:checksumSize+timestampSize+keySize], e.keySize)
+	binary.BigEndian.PutUint32(buffer[checksumSize+timestampSize+keySize:checksumSize+timestampSize+keySize+valueSize], e.valueSize)
 	return buffer, e.key, e.value
 }
 
@@ -79,7 +79,7 @@ type DataFile interface {
 	Name() string
 	Offset() int
 	Write(e *Entry) (int, error)
-	ReadEntry(Item) (Entry, error)
+	ReadEntry(string, Item) (Entry, error)
 }
 
 type datafile struct {
@@ -126,13 +126,43 @@ func (d *datafile) Write(entry *Entry) (int, error) {
 	return bytesWritten, nil
 }
 
-func (d *datafile) ReadEntry(item Item) (Entry, error) {
-	return Entry{}, nil
+func (d *datafile) ReadEntry(datadir string, item Item) (Entry, error) {
+	f, err := os.OpenFile(filepath.Join(datadir, fmt.Sprint(item.fileID)), os.O_RDONLY, 664)
+	defer f.Close()
+	if err != nil {
+		return Entry{}, err
+	}
+	buf := make([]byte, item.size)
+	_, err = f.ReadAt(buf, int64(item.offset))
+	if err != nil {
+		return Entry{}, err
+	}
+	e, err := RebuildEntry(buf)
+	if err != nil {
+		return Entry{}, err
+	}
+	return e, nil
+}
+
+func RebuildEntry(buffer []byte) (Entry, error) {
+	keyLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize : checksumSize+timestampSize+keySize])
+	valueLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize+keySize : checksumSize+timestampSize+keySize+valueSize])
+	e := Entry{
+		checksum:  binary.BigEndian.Uint32(buffer[:checksumSize]),
+		tstamp:    binary.BigEndian.Uint64(buffer[checksumSize : checksumSize+timestampSize]),
+		keySize:   keyLength,
+		valueSize: valueLength,
+		key:       buffer[checksumSize+timestampSize+keySize+valueSize : checksumSize+timestampSize+keySize+valueSize+keyLength],
+		value:     buffer[checksumSize+timestampSize+keySize+valueSize+keyLength : checksumSize+timestampSize+keySize+valueSize+keyLength+valueLength],
+	}
+
+	return e, nil
+
 }
 
 func NewDataFile(path string) (DataFile, error) {
 	fileName := int(time.Now().UnixNano())
-	f, err := os.OpenFile(filepath.Join(path, fmt.Sprint(fileName)), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 660)
+	f, err := os.OpenFile(filepath.Join(path, fmt.Sprint(fileName)), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 664)
 	if err != nil {
 		return nil, err
 	}
@@ -152,8 +182,9 @@ func BuildKeyDir() (KeyDir, error) {
 }
 
 type DB struct {
-	df DataFile
-	kd KeyDir
+	df      DataFile
+	kd      KeyDir
+	datadir string
 }
 
 func NewDB(datadir string) (*DB, error) {
@@ -170,21 +201,25 @@ func NewDB(datadir string) (*DB, error) {
 		return &DB{}, err
 	}
 	return &DB{
-		df: df,
-		kd: kd,
+		df:      df,
+		kd:      kd,
+		datadir: datadir,
 	}, nil
 }
 
 func (mq *DB) Put(key string, value []byte) error {
 	e := NewEntry(key, value)
 	bytesWritten, err := mq.df.Write(&e)
-	mq.kd.Set(key, mq.df.Offset(), bytesWritten)
-	return err
+	if err != nil {
+		return err
+	}
+	mq.kd.Set(key, mq.df.Offset(), bytesWritten, mq.df.Id())
+	return nil
 }
 
 func (mq *DB) Get(key string) ([]byte, error) {
 	item := mq.kd.Get(key)
-	entry, err := mq.df.ReadEntry(item)
+	entry, err := mq.df.ReadEntry(mq.datadir, item)
 	if err != nil {
 		return make([]byte, 0), err
 	}

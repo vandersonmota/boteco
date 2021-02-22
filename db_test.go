@@ -21,5 +21,5 @@ func TestGet(t *testing.T) {
 	assert.Nil(t, err)
 	val, err := mq.Get("foo")
 	assert.Nil(t, err)
-	assert.Equal(t, val, []byte("foo"))
+	assert.Equal(t, []byte("foo"), val)
 }

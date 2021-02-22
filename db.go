@@ -162,7 +162,7 @@ func RebuildEntry(buffer []byte) (Entry, error) {
 
 func NewDataFile(path string) (DataFile, error) {
 	fileName := int(time.Now().UnixNano())
-	f, err := os.OpenFile(filepath.Join(path, fmt.Sprint(fileName)), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 664)
+	f, err := os.OpenFile(filepath.Join(path, fmt.Sprint(fileName)), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0665)
 	if err != nil {
 		return nil, err
 	}

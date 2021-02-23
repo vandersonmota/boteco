@@ -23,3 +23,18 @@ func TestGet(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, []byte("fooo"), val)
 }
+func TestGetMultiple(t *testing.T) {
+	mq, err := NewDB("data2")
+	assert.Nil(t, err)
+	err = mq.Put("foo", []byte("fooo"))
+	assert.Nil(t, err)
+	err = mq.Put("spam", []byte("spam"))
+	assert.Nil(t, err)
+	err = mq.Put("eggs", []byte("eggs"))
+	assert.Nil(t, err)
+	err = mq.Put("bar", []byte("12345"))
+	assert.Nil(t, err)
+	val, err := mq.Get("bar")
+	assert.Nil(t, err)
+	assert.Equal(t, []byte("12345"), val)
+}

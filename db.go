@@ -39,7 +39,7 @@ func (kd *KeyDir) Get(key string) Item {
 func (kd *KeyDir) Set(key string, offset, size, fileID int) {
 	kd.m[key] = Item{
 		fileID: fileID,
-		offset: offset,
+		offset: offset - size, //Means file was just written, then offset moved
 		size:   size,
 	}
 }
@@ -122,6 +122,7 @@ func (d *datafile) Write(entry *Entry) (int, error) {
 		return 0, err
 	}
 	bytesWritten += n
+	d.offset += bytesWritten
 
 	return bytesWritten, nil
 }

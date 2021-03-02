@@ -7,7 +7,9 @@ import (
 )
 
 func TestPut(t *testing.T) {
-	mq, err := NewDB("data")
+	mq, err := NewDB(Config{
+		Datadir: "data",
+	})
 	assert.Nil(t, err)
 	err = mq.Put("foo", []byte("fooo"))
 	assert.Nil(t, err)
@@ -15,7 +17,7 @@ func TestPut(t *testing.T) {
 	assert.Nil(t, err)
 }
 func TestGet(t *testing.T) {
-	mq, err := NewDB("data2")
+	mq, err := NewDB(Config{Datadir: "data2"})
 	assert.Nil(t, err)
 	err = mq.Put("foo", []byte("fooo"))
 	assert.Nil(t, err)
@@ -24,7 +26,7 @@ func TestGet(t *testing.T) {
 	assert.Equal(t, []byte("fooo"), val)
 }
 func TestGetMultiple(t *testing.T) {
-	mq, err := NewDB("data2")
+	mq, err := NewDB(Config{Datadir: "data2"})
 	assert.Nil(t, err)
 	err = mq.Put("foo", []byte("fooo"))
 	assert.Nil(t, err)

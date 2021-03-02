@@ -175,7 +175,7 @@ func NewDataFile(path string) (DataFile, error) {
 	return &datafile{
 		id:     fileName, // TODO: maybe uuids?
 		fd:     f,
-		offset: 0, // TODO change it
+		offset: 0,
 		name:   path,
 	}, nil
 
@@ -193,12 +193,12 @@ type DB struct {
 	datadir string
 }
 
-func NewDB(datadir string) (*DB, error) {
-	err := os.MkdirAll(datadir, 0755)
+func NewDB(cfg Config) (*DB, error) {
+	err := os.MkdirAll(cfg.Datadir, 0755)
 	if err != nil {
 		return nil, err
 	}
-	df, err := NewDataFile(datadir)
+	df, err := NewDataFile(cfg.Datadir)
 	if err != nil {
 		return &DB{}, err
 	}
@@ -209,7 +209,7 @@ func NewDB(datadir string) (*DB, error) {
 	return &DB{
 		df:      df,
 		kd:      kd,
-		datadir: datadir,
+		datadir: cfg.Datadir,
 	}, nil
 }
 

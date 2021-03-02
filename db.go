@@ -80,6 +80,7 @@ type DataFile interface {
 	Offset() int
 	Write(e *Entry) (int, error)
 	ReadEntry(string, Item) (Entry, error)
+	Close() error
 }
 
 type datafile struct {
@@ -143,6 +144,10 @@ func (d *datafile) ReadEntry(datadir string, item Item) (Entry, error) {
 		return Entry{}, err
 	}
 	return e, nil
+}
+
+func (d *datafile) Close() error {
+	return d.fd.Close()
 }
 
 func RebuildEntry(buffer []byte) (Entry, error) {

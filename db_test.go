@@ -40,3 +40,17 @@ func TestGetMultiple(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, []byte("12345"), val)
 }
+
+func TestMultipleDataFiles(t *testing.T) {
+	mq, err := NewDB(Config{Datadir: "data2", MaxDataFileSize: 30})
+	assert.Nil(t, err)
+	err = mq.Put("foo", []byte("fooo"))
+	assert.Nil(t, err)
+	err = mq.Put("bar", []byte("12345"))
+	assert.Nil(t, err)
+	val, err := mq.Get("bar")
+	assert.Nil(t, err)
+	assert.Equal(t, []byte("12345"), val)
+
+	// TODO: check files created
+}

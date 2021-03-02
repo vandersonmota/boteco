@@ -62,6 +62,10 @@ func (e *Entry) Encode() (headers, key, value []byte) {
 	return buffer, e.key, e.value
 }
 
+func (e *Entry) Size() int {
+	return checksumSize + timestampSize + keySize + valueSize + len(e.key) + len(e.value)
+}
+
 func NewEntry(key string, value []byte) Entry {
 	k := []byte(key)
 	return Entry{
@@ -84,10 +88,11 @@ type DataFile interface {
 }
 
 type datafile struct {
-	id     int
-	name   string
-	offset int
-	fd     *os.File
+	id      int
+	name    string
+	offset  int
+	maxSize int
+	fd      *os.File
 }
 
 func (d *datafile) Id() int {
@@ -151,6 +156,7 @@ func (d *datafile) Close() error {
 }
 
 func RebuildEntry(buffer []byte) (Entry, error) {
+	// TODO: Add CRC check
 	keyLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize : checksumSize+timestampSize+keySize])
 	valueLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize+keySize : checksumSize+timestampSize+keySize+valueSize])
 	e := Entry{
@@ -166,17 +172,18 @@ func RebuildEntry(buffer []byte) (Entry, error) {
 
 }
 
-func NewDataFile(path string) (DataFile, error) {
+func NewDataFile(path string, size int) (DataFile, error) {
 	fileName := int(time.Now().UnixNano())
 	f, err := os.OpenFile(filepath.Join(path, fmt.Sprint(fileName)), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0665)
 	if err != nil {
 		return nil, err
 	}
 	return &datafile{
-		id:     fileName, // TODO: maybe uuids?
-		fd:     f,
-		offset: 0,
-		name:   path,
+		id:      fileName, // TODO: maybe uuids?
+		fd:      f,
+		offset:  0,
+		name:    path,
+		maxSize: size,
 	}, nil
 
 }
@@ -191,6 +198,7 @@ type DB struct {
 	df      DataFile
 	kd      KeyDir
 	datadir string
+	config  Config
 }
 
 func NewDB(cfg Config) (*DB, error) {
@@ -198,7 +206,7 @@ func NewDB(cfg Config) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	df, err := NewDataFile(cfg.Datadir)
+	df, err := NewDataFile(cfg.Datadir, cfg.MaxDataFileSize)
 	if err != nil {
 		return &DB{}, err
 	}
@@ -209,12 +217,21 @@ func NewDB(cfg Config) (*DB, error) {
 	return &DB{
 		df:      df,
 		kd:      kd,
-		datadir: cfg.Datadir,
+		datadir: cfg.Datadir, // TODO: remove redundancy with config
+		config:  cfg,
 	}, nil
 }
 
 func (mq *DB) Put(key string, value []byte) error {
 	e := NewEntry(key, value)
+	if (mq.df.Offset() + e.Size()) >= mq.config.MaxDataFileSize {
+		df, err := NewDataFile(mq.config.Datadir, mq.config.MaxDataFileSize)
+		if err != nil {
+			return err
+		}
+		mq.df = df
+
+	}
 	bytesWritten, err := mq.df.Write(&e)
 	if err != nil {
 		return err

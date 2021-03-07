@@ -1,14 +1,30 @@
 package potatomq
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
-func TestPut(t *testing.T) {
+type DBTestSuite struct {
+	suite.Suite
+	Datadir string
+}
+
+func (suite *DBTestSuite) SetupTest() {
+	suite.Datadir = "data"
+	os.RemoveAll(suite.Datadir)
+}
+func (suite *DBTestSuite) TearDownTest() {
+	os.RemoveAll(suite.Datadir)
+}
+
+func (suite *DBTestSuite) TestPut() {
+	t := suite.T()
 	mq, err := NewDB(Config{
-		Datadir: "data",
+		Datadir: suite.Datadir,
 	})
 	assert.Nil(t, err)
 	err = mq.Put("foo", []byte("fooo"))
@@ -16,8 +32,9 @@ func TestPut(t *testing.T) {
 	err = mq.Put("foo", []byte("bar"))
 	assert.Nil(t, err)
 }
-func TestGet(t *testing.T) {
-	mq, err := NewDB(Config{Datadir: "data2"})
+func (suite *DBTestSuite) TestGet() {
+	t := suite.T()
+	mq, err := NewDB(Config{Datadir: suite.Datadir})
 	assert.Nil(t, err)
 	err = mq.Put("foo", []byte("fooo"))
 	assert.Nil(t, err)
@@ -25,8 +42,9 @@ func TestGet(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, []byte("fooo"), val)
 }
-func TestGetMultiple(t *testing.T) {
-	mq, err := NewDB(Config{Datadir: "data2"})
+func (suite *DBTestSuite) TestGetMultiple() {
+	t := suite.T()
+	mq, err := NewDB(Config{Datadir: suite.Datadir})
 	assert.Nil(t, err)
 	err = mq.Put("foo", []byte("fooo"))
 	assert.Nil(t, err)
@@ -41,8 +59,9 @@ func TestGetMultiple(t *testing.T) {
 	assert.Equal(t, []byte("12345"), val)
 }
 
-func TestMultipleDataFiles(t *testing.T) {
-	mq, err := NewDB(Config{Datadir: "data2", MaxDataFileSize: 30})
+func (suite *DBTestSuite) TestGetMultipleDataFiles() {
+	t := suite.T()
+	mq, err := NewDB(Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
 	assert.Nil(t, err)
 	err = mq.Put("foo", []byte("fooo"))
 	assert.Nil(t, err)
@@ -53,4 +72,7 @@ func TestMultipleDataFiles(t *testing.T) {
 	assert.Equal(t, []byte("12345"), val)
 
 	// TODO: check files created
+}
+func TestDBTestSuite(t *testing.T) {
+	suite.Run(t, new(DBTestSuite))
 }

@@ -1,6 +1,7 @@
 package potatomq
 
 import (
+	"io/ioutil"
 	"os"
 	"testing"
 
@@ -71,7 +72,9 @@ func (suite *DBTestSuite) TestGetMultipleDataFiles() {
 	assert.Nil(t, err)
 	assert.Equal(t, []byte("12345"), val)
 
-	// TODO: check files created
+	files, _ := ioutil.ReadDir(suite.Datadir)
+
+	assert.Equal(t, 3, len(files))
 }
 func TestDBTestSuite(t *testing.T) {
 	suite.Run(t, new(DBTestSuite))

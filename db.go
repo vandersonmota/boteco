@@ -83,6 +83,7 @@ type DataFile interface {
 	Name() string
 	Offset() int
 	Write(e *Entry) (int, error)
+	WriteHeader(version, size int) (int, error)
 	ReadEntry(string, Item) (Entry, error)
 	Close() error
 }
@@ -123,6 +124,27 @@ func (d *datafile) Write(entry *Entry) (int, error) {
 	}
 	bytesWritten += n
 	n, err = d.fd.Write(value)
+	if err != nil {
+		// TODO: log
+		return 0, err
+	}
+	bytesWritten += n
+	d.offset += bytesWritten
+
+	return bytesWritten, nil
+}
+
+/*
+ TODO: Be explicit about int size on config
+ as integers change their size according to the operating
+ system (32 and 64 bits)
+*/
+func (d *datafile) WriteHeader(version, size int) (int, error) {
+	buffer := make([]byte, 16) // 64 bit is assumed
+	binary.BigEndian.PutUint64(buffer[:8], uint64(version))
+	binary.BigEndian.PutUint64(buffer[8:], uint64(size))
+	bytesWritten := 0
+	n, err := d.fd.Write(buffer)
 	if err != nil {
 		// TODO: log
 		return 0, err
@@ -207,6 +229,10 @@ func NewDB(cfg Config) (*DB, error) {
 		return nil, err
 	}
 	df, err := NewDataFile(cfg.Datadir, cfg.MaxDataFileSize)
+	if err != nil {
+		return &DB{}, err
+	}
+	_, err = df.WriteHeader(Version, cfg.MaxDataFileSize)
 	if err != nil {
 		return &DB{}, err
 	}

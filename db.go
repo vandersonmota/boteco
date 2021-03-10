@@ -140,9 +140,10 @@ func (d *datafile) Write(entry *Entry) (int, error) {
  system (32 and 64 bits)
 */
 func (d *datafile) WriteHeader(version, size int) (int, error) {
-	buffer := make([]byte, 16) // 64 bit is assumed
-	binary.BigEndian.PutUint64(buffer[:8], uint64(version))
-	binary.BigEndian.PutUint64(buffer[8:], uint64(size))
+	buffer := make([]byte, 24) // 64 bit is assumed
+	binary.BigEndian.PutUint64(buffer[:8], uint64(time.Now().UnixNano()))
+	binary.BigEndian.PutUint64(buffer[8:16], uint64(version))
+	binary.BigEndian.PutUint64(buffer[16:], uint64(size))
 	bytesWritten := 0
 	n, err := d.fd.Write(buffer)
 	if err != nil {

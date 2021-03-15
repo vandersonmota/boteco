@@ -276,3 +276,12 @@ func (mq *DB) Get(key string) ([]byte, error) {
 
 	return entry.value, err
 }
+
+func (mq *DB) Shutdown() error {
+	err := mq.df.Close()
+	if err != nil {
+		// TODO: log
+		return err
+	}
+	return nil
+}

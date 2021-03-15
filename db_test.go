@@ -76,6 +76,23 @@ func (suite *DBTestSuite) TestGetMultipleDataFiles() {
 
 	assert.Equal(t, 3, len(files))
 }
+func (suite *DBTestSuite) TestPutCloseAndGet() {
+	t := suite.T()
+	mq, err := NewDB(Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
+	assert.Nil(t, err)
+	err = mq.Put("bar", []byte("12345"))
+	assert.Nil(t, err)
+
+	err = mq.Shutdown()
+	assert.Nil(t, err)
+
+	mq, err = NewDB(Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
+	assert.Nil(t, err)
+	val, err := mq.Get("bar")
+	assert.Nil(t, err)
+	assert.Equal(t, []byte("12345"), val)
+
+}
 func TestDBTestSuite(t *testing.T) {
 	suite.Run(t, new(DBTestSuite))
 }

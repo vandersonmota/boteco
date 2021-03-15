@@ -4,8 +4,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/crc32"
+	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 )
 
@@ -14,6 +17,8 @@ const (
 	valueSize     = 8
 	checksumSize  = 4
 	timestampSize = 8
+	fileIDSize    = 8
+	entryHeaderSize = checksumSize + timestampSize + keySize + valueSize
 )
 
 type Item struct {
@@ -44,11 +49,15 @@ func (kd *KeyDir) Set(key string, offset, size, fileID int) {
 	}
 }
 
-type Entry struct {
+type Header struct {
 	checksum  uint32
 	tstamp    uint64
 	keySize   uint32
 	valueSize uint32
+}
+
+type Entry struct {
+	Header
 	key       []byte
 	value     []byte
 }
@@ -89,7 +98,7 @@ type DataFile interface {
 }
 
 type datafile struct {
-	id      int
+	id      int // FIXME: don't use timestamp
 	name    string
 	offset  int
 	maxSize int
@@ -194,6 +203,19 @@ func RebuildEntry(buffer []byte) (Entry, error) {
 	return e, nil
 
 }
+func RebuildHeaders(buffer []byte) (Header, error) {
+	keyLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize : checksumSize+timestampSize+keySize])
+	valueLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize+keySize : entryHeaderSize])
+	e := Header{
+		checksum:  binary.BigEndian.Uint32(buffer[:checksumSize]),
+		tstamp:    binary.BigEndian.Uint64(buffer[checksumSize : checksumSize+timestampSize]),
+		keySize:   keyLength,
+		valueSize: valueLength,
+	}
+
+	return e, nil
+
+}
 
 func NewDataFile(path string, size int) (DataFile, error) {
 	fileName := int(time.Now().UnixNano())
@@ -211,10 +233,77 @@ func NewDataFile(path string, size int) (DataFile, error) {
 
 }
 
-func BuildKeyDir() (KeyDir, error) {
-	return KeyDir{
+func BuildKeyDir(path string) (KeyDir, error) {
+	kd := KeyDir{
 		m: map[string]Item{},
-	}, nil
+	}
+
+	dfs := map[uint64]string{}
+	fileIDs := []uint64{}
+	datafiles, err := ioutil.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO strong candidate for paralellization
+	for _, f := range datafiles {
+		fd, err := os.OpenFile(filepath.Join(path, fmt.Sprint(f.Name())), os.O_RDONLY, 0665)
+		if err != nil {
+			// TODO: log
+		}
+
+		var header [fileIDSize]byte
+
+		n, err := io.ReadFull(fd, header[:])
+
+		if n != fileIDSize {
+			// TODO: log, probably corrupted file
+		}
+		id := binary.BigEndian.Uint64(header[:])
+		fileIDs = append(fileIDs, id)
+		dfs[id] = f.Name()
+		err = fd.Close()
+		if err != nil {
+			//TODO: log
+		}
+	}
+
+	sort.SliceStable(fileIDs, func(l, r int) bool {
+		return fileIDs[l] < fileIDs[r]
+	})
+
+	for _, fID := range fileIDs {
+		name := dfs[fID]
+		fd, err := os.OpenFile(filepath.Join(path, fmt.Sprint(name), os.O_RDONLY, 0665)
+		if err != nil {
+			// TODO: log
+		}
+		df := &datafile{
+			id:      name, // TODO: maybe uuids?
+			fd:      fd,
+			offset:  25, // 24 first bytes are for headers
+			name:    path,
+			maxSize: size,
+		}
+		buf := make([]byte, entryHeaderSize)
+		_, err = f.ReadAt(buf, int64(offset))
+		if err != nil {
+			// TODO: log
+			return kd, err
+		}
+		h, err := RebuildHeaders(buf)
+		if err != nil {
+			// TODO: log
+			return kd, err
+		}
+
+		// TODO read key, set keydir and plus offset
+
+		kd.Set()
+	}
+
+	return kd, nil
+
 }
 
 type DB struct {
@@ -237,7 +326,7 @@ func NewDB(cfg Config) (*DB, error) {
 	if err != nil {
 		return &DB{}, err
 	}
-	kd, err := BuildKeyDir()
+	kd, err := BuildKeyDir(cfg.Datadir)
 	if err != nil {
 		return &DB{}, err
 	}

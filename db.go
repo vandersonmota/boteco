@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"time"
 )
 
@@ -260,27 +261,19 @@ func BuildKeyDir(path string) (KeyDir, error) {
 		return kd, err
 	}
 
-	fmt.Println("DATA files")
-	fmt.Println(datafiles)
 	// TODO strong candidate for paralellization
 	for _, f := range datafiles {
+
 		fd, err := os.OpenFile(filepath.Join(path, fmt.Sprint(f.Name())), os.O_RDONLY, 0665)
 		if err != nil {
 			// TODO: log
 		}
 
-		var header [fileIDSize]byte
-
-		n, err := io.ReadFull(fd, header[:])
+		id, err := strconv.ParseUint(f.Name(), 10, 64)
 		if err != nil {
 			return kd, err
 			// TODO: log
 		}
-
-		if n != fileIDSize {
-			// TODO: log, probably corrupted file
-		}
-		id := binary.BigEndian.Uint64(header[:])
 		fileIDs = append(fileIDs, id)
 		dfs[id] = f.Name()
 		err = fd.Close()
@@ -308,26 +301,15 @@ func BuildKeyDir(path string) (KeyDir, error) {
 			return kd, errors.New("Corrupted file")
 		}
 
-		df := &datafile{
-			id:      int(fID), // TODO: maybe uuids?
-			fd:      fd,
-			offset:  0,
-			name:    path,
-			maxSize: int(fileInfo.Size()),
-		}
-		fmt.Println("offset")
-		fmt.Println(df.Offset())
-		fmt.Println("file size")
-		fmt.Println(fileInfo.Size())
-		for df.Offset() < int(fileInfo.Size()) {
+		offset := 0
+		for {
 			buf := make([]byte, entryHeaderSize)
-			_, err = fd.ReadAt(buf, int64(df.Offset()))
+			_, err = fd.ReadAt(buf, int64(0))
 			if err != nil {
 				// TODO: log
-				fmt.Println("DEU RUIM")
-				fmt.Println(df.Offset())
-				fmt.Println(fileInfo.Size())
-
+				if err == io.EOF {
+					break
+				}
 				return kd, err
 			}
 			h, err := RebuildHeaders(buf)
@@ -338,14 +320,22 @@ func BuildKeyDir(path string) (KeyDir, error) {
 
 			// need to readthe file sequentially, for all records
 			keyBuf := make([]byte, h.keySize)
-			_, err = fd.ReadAt(keyBuf, int64(h.keySize))
+			_, err = fd.ReadAt(keyBuf, int64(offset+entryHeaderSize))
+			if err != nil {
+				// TODO: log
+				if err == io.EOF {
+					break
+				}
+				return kd, err
+			}
 
 			// This is dangerous, need to normalize everything to an integer type
-			size := int(h.tstamp) + int(h.checksum) + keySize + valueSize + int(h.keySize) + int(h.valueSize)
-			df.IncreaseOffset(size)
-			kd.Set(string(keyBuf[:]), df.offset, size, int(fID))
+			size := entryHeaderSize + int(h.keySize) + int(h.valueSize)
+			key := string(keyBuf[:])
+
+			offset += size
+			kd.Set(key, offset, size, int(fID))
 		}
-		df.ResetOffset()
 		fd.Close()
 	}
 
@@ -369,16 +359,11 @@ func NewDB(cfg Config) (*DB, error) {
 	if err != nil {
 		return &DB{}, err
 	}
-	fmt.Println("OOE")
-	fmt.Println(df.Offset())
 	_, err = df.WriteHeader(Version, cfg.MaxDataFileSize)
 	if err != nil {
 		return &DB{}, err
 	}
 	kd, err := BuildKeyDir(cfg.Datadir)
-	fmt.Println("BICHO vino")
-	fmt.Println(df.Offset())
-	fmt.Println(kd)
 	if err != nil {
 		return &DB{}, err
 	}

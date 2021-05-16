@@ -1,7 +1,6 @@
 package potatomq
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -88,8 +87,6 @@ func (suite *DBTestSuite) TestPutCloseAndGet() {
 	assert.Nil(t, err)
 
 	mq, err = NewDB(Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
-	fmt.Println("AEEEEE")
-	fmt.Println(mq.df)
 	assert.Nil(t, err)
 	val, err := mq.Get("bar")
 	assert.Nil(t, err)

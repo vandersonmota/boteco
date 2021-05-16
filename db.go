@@ -2,6 +2,7 @@ package potatomq
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -13,11 +14,11 @@ import (
 )
 
 const (
-	keySize       = 4
-	valueSize     = 8
-	checksumSize  = 4
-	timestampSize = 8
-	fileIDSize    = 8
+	keySize         = 4
+	valueSize       = 8
+	checksumSize    = 4
+	timestampSize   = 8
+	fileIDSize      = 8
 	entryHeaderSize = checksumSize + timestampSize + keySize + valueSize
 )
 
@@ -57,9 +58,9 @@ type Header struct {
 }
 
 type Entry struct {
-	Header
-	key       []byte
-	value     []byte
+	*Header
+	key   []byte
+	value []byte
 }
 
 func (e *Entry) Encode() (headers, key, value []byte) {
@@ -78,12 +79,14 @@ func (e *Entry) Size() int {
 func NewEntry(key string, value []byte) Entry {
 	k := []byte(key)
 	return Entry{
-		checksum:  crc32.ChecksumIEEE(value),
-		tstamp:    uint64(time.Now().UnixNano()),
-		keySize:   uint32(len(k)),
-		valueSize: uint32(len(value)),
-		key:       []byte(key),
-		value:     value,
+		Header: &Header{
+			checksum:  crc32.ChecksumIEEE(value),
+			tstamp:    uint64(time.Now().UnixNano()),
+			keySize:   uint32(len(k)),
+			valueSize: uint32(len(value)),
+		},
+		key:   []byte(key),
+		value: value,
 	}
 }
 
@@ -95,6 +98,8 @@ type DataFile interface {
 	WriteHeader(version, size int) (int, error)
 	ReadEntry(string, Item) (Entry, error)
 	Close() error
+	IncreaseOffset(i int)
+	ResetOffset()
 }
 
 type datafile struct {
@@ -141,6 +146,14 @@ func (d *datafile) Write(entry *Entry) (int, error) {
 	d.offset += bytesWritten
 
 	return bytesWritten, nil
+}
+
+func (d *datafile) IncreaseOffset(i int) {
+	d.offset += i
+}
+
+func (d *datafile) ResetOffset() {
+	d.offset = 0
 }
 
 /*
@@ -192,12 +205,14 @@ func RebuildEntry(buffer []byte) (Entry, error) {
 	keyLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize : checksumSize+timestampSize+keySize])
 	valueLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize+keySize : checksumSize+timestampSize+keySize+valueSize])
 	e := Entry{
-		checksum:  binary.BigEndian.Uint32(buffer[:checksumSize]),
-		tstamp:    binary.BigEndian.Uint64(buffer[checksumSize : checksumSize+timestampSize]),
-		keySize:   keyLength,
-		valueSize: valueLength,
-		key:       buffer[checksumSize+timestampSize+keySize+valueSize : checksumSize+timestampSize+keySize+valueSize+keyLength],
-		value:     buffer[checksumSize+timestampSize+keySize+valueSize+keyLength : checksumSize+timestampSize+keySize+valueSize+keyLength+valueLength],
+		Header: &Header{
+			checksum:  binary.BigEndian.Uint32(buffer[:checksumSize]),
+			tstamp:    binary.BigEndian.Uint64(buffer[checksumSize : checksumSize+timestampSize]),
+			keySize:   keyLength,
+			valueSize: valueLength,
+		},
+		key:   buffer[checksumSize+timestampSize+keySize+valueSize : checksumSize+timestampSize+keySize+valueSize+keyLength],
+		value: buffer[checksumSize+timestampSize+keySize+valueSize+keyLength : checksumSize+timestampSize+keySize+valueSize+keyLength+valueLength],
 	}
 
 	return e, nil
@@ -242,9 +257,11 @@ func BuildKeyDir(path string) (KeyDir, error) {
 	fileIDs := []uint64{}
 	datafiles, err := ioutil.ReadDir(path)
 	if err != nil {
-		return nil, err
+		return kd, err
 	}
 
+	fmt.Println("DATA files")
+	fmt.Println(datafiles)
 	// TODO strong candidate for paralellization
 	for _, f := range datafiles {
 		fd, err := os.OpenFile(filepath.Join(path, fmt.Sprint(f.Name())), os.O_RDONLY, 0665)
@@ -255,6 +272,10 @@ func BuildKeyDir(path string) (KeyDir, error) {
 		var header [fileIDSize]byte
 
 		n, err := io.ReadFull(fd, header[:])
+		if err != nil {
+			return kd, err
+			// TODO: log
+		}
 
 		if n != fileIDSize {
 			// TODO: log, probably corrupted file
@@ -274,32 +295,58 @@ func BuildKeyDir(path string) (KeyDir, error) {
 
 	for _, fID := range fileIDs {
 		name := dfs[fID]
-		fd, err := os.OpenFile(filepath.Join(path, fmt.Sprint(name), os.O_RDONLY, 0665)
+		fd, err := os.OpenFile(filepath.Join(path, fmt.Sprint(name)), os.O_RDONLY, 0665)
 		if err != nil {
 			// TODO: log
 		}
+		fileInfo, err := fd.Stat()
+		if err != nil {
+			// TODO: log
+		}
+
+		if fileInfo.Size() < entryHeaderSize {
+			return kd, errors.New("Corrupted file")
+		}
+
 		df := &datafile{
-			id:      name, // TODO: maybe uuids?
+			id:      int(fID), // TODO: maybe uuids?
 			fd:      fd,
-			offset:  25, // 24 first bytes are for headers
+			offset:  0,
 			name:    path,
-			maxSize: size,
+			maxSize: int(fileInfo.Size()),
 		}
-		buf := make([]byte, entryHeaderSize)
-		_, err = f.ReadAt(buf, int64(offset))
-		if err != nil {
-			// TODO: log
-			return kd, err
-		}
-		h, err := RebuildHeaders(buf)
-		if err != nil {
-			// TODO: log
-			return kd, err
-		}
+		fmt.Println("offset")
+		fmt.Println(df.Offset())
+		fmt.Println("file size")
+		fmt.Println(fileInfo.Size())
+		for df.Offset() < int(fileInfo.Size()) {
+			buf := make([]byte, entryHeaderSize)
+			_, err = fd.ReadAt(buf, int64(df.Offset()))
+			if err != nil {
+				// TODO: log
+				fmt.Println("DEU RUIM")
+				fmt.Println(df.Offset())
+				fmt.Println(fileInfo.Size())
 
-		// TODO read key, set keydir and plus offset
+				return kd, err
+			}
+			h, err := RebuildHeaders(buf)
+			if err != nil {
+				// TODO: log
+				return kd, err
+			}
 
-		kd.Set()
+			// need to readthe file sequentially, for all records
+			keyBuf := make([]byte, h.keySize)
+			_, err = fd.ReadAt(keyBuf, int64(h.keySize))
+
+			// This is dangerous, need to normalize everything to an integer type
+			size := int(h.tstamp) + int(h.checksum) + keySize + valueSize + int(h.keySize) + int(h.valueSize)
+			df.IncreaseOffset(size)
+			kd.Set(string(keyBuf[:]), df.offset, size, int(fID))
+		}
+		df.ResetOffset()
+		fd.Close()
 	}
 
 	return kd, nil
@@ -322,11 +369,16 @@ func NewDB(cfg Config) (*DB, error) {
 	if err != nil {
 		return &DB{}, err
 	}
+	fmt.Println("OOE")
+	fmt.Println(df.Offset())
 	_, err = df.WriteHeader(Version, cfg.MaxDataFileSize)
 	if err != nil {
 		return &DB{}, err
 	}
 	kd, err := BuildKeyDir(cfg.Datadir)
+	fmt.Println("BICHO vino")
+	fmt.Println(df.Offset())
+	fmt.Println(kd)
 	if err != nil {
 		return &DB{}, err
 	}

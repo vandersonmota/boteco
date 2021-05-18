@@ -99,8 +99,6 @@ type DataFile interface {
 	WriteHeader(version, size int) (int, error)
 	ReadEntry(string, Item) (Entry, error)
 	Close() error
-	IncreaseOffset(i int)
-	ResetOffset()
 }
 
 type datafile struct {
@@ -147,14 +145,6 @@ func (d *datafile) Write(entry *Entry) (int, error) {
 	d.offset += bytesWritten
 
 	return bytesWritten, nil
-}
-
-func (d *datafile) IncreaseOffset(i int) {
-	d.offset += i
-}
-
-func (d *datafile) ResetOffset() {
-	d.offset = 0
 }
 
 /*

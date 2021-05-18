@@ -239,9 +239,67 @@ func NewDataFile(path string, size int) (DataFile, error) {
 
 }
 
+type EntryLocation struct {
+	key    string
+	offset int
+	size   int
+}
+
 type DataFileMapping struct {
 	id   uint64
 	path string
+}
+
+func (mapping *DataFileMapping) listEntriesLocation() ([]EntryLocation, error) {
+	entriesLocation := []EntryLocation{}
+	fd, err := os.OpenFile(mapping.path, os.O_RDONLY, 0665)
+	defer fd.Close()
+	if err != nil {
+		return entriesLocation, err
+	}
+	fileInfo, err := fd.Stat()
+	if err != nil {
+		return entriesLocation, err
+	}
+
+	if fileInfo.Size() < entryHeaderSize {
+		return entriesLocation, errors.New("Corrupted file")
+	}
+
+	offset := 0
+	for {
+		buf := make([]byte, entryHeaderSize)
+		_, err = fd.ReadAt(buf, int64(0))
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return entriesLocation, err
+		}
+		h, err := RebuildHeaders(buf)
+		if err != nil {
+			return entriesLocation, err
+		}
+
+		// need to readthe file sequentially, for all records
+		keyBuf := make([]byte, h.keySize)
+		_, err = fd.ReadAt(keyBuf, int64(offset+entryHeaderSize))
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return entriesLocation, err
+		}
+
+		// This is dangerous, need to normalize everything to an integer type
+		size := entryHeaderSize + int(h.keySize) + int(h.valueSize)
+		key := string(keyBuf[:])
+
+		offset += size
+		entriesLocation = append(entriesLocation, EntryLocation{key, offset, size})
+	}
+
+	return entriesLocation, nil
 }
 
 func listFileMappings(path string) ([]DataFileMapping, error) {
@@ -285,55 +343,14 @@ func BuildKeyDir(path string) (KeyDir, error) {
 	}
 
 	for _, mapping := range fileMappings {
-		fd, err := os.OpenFile(mapping.path, os.O_RDONLY, 0665)
+		locations, err := mapping.listEntriesLocation()
 		if err != nil {
-			// TODO: log
+			// TODO: better error handling
+			return kd, nil
 		}
-		fileInfo, err := fd.Stat()
-		if err != nil {
-			// TODO: log
+		for _, location := range locations {
+			kd.Set(location.key, location.offset, location.size, int(mapping.id))
 		}
-
-		if fileInfo.Size() < entryHeaderSize {
-			return kd, errors.New("Corrupted file")
-		}
-
-		offset := 0
-		for {
-			buf := make([]byte, entryHeaderSize)
-			_, err = fd.ReadAt(buf, int64(0))
-			if err != nil {
-				// TODO: log
-				if err == io.EOF {
-					break
-				}
-				return kd, err
-			}
-			h, err := RebuildHeaders(buf)
-			if err != nil {
-				// TODO: log
-				return kd, err
-			}
-
-			// need to readthe file sequentially, for all records
-			keyBuf := make([]byte, h.keySize)
-			_, err = fd.ReadAt(keyBuf, int64(offset+entryHeaderSize))
-			if err != nil {
-				// TODO: log
-				if err == io.EOF {
-					break
-				}
-				return kd, err
-			}
-
-			// This is dangerous, need to normalize everything to an integer type
-			size := entryHeaderSize + int(h.keySize) + int(h.valueSize)
-			key := string(keyBuf[:])
-
-			offset += size
-			kd.Set(key, offset, size, int(mapping.id))
-		}
-		fd.Close()
 	}
 
 	return kd, nil

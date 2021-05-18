@@ -254,7 +254,7 @@ func BuildKeyDir(path string) (KeyDir, error) {
 	// TODO strong candidate for paralellization
 	for _, f := range datafiles {
 
-		fd, err := os.OpenFile(filepath.Join(path, fmt.Sprint(f.Name())), os.O_RDONLY, 0665)
+		path := filepath.Join(path, fmt.Sprint(f.Name()))
 		if err != nil {
 			// TODO: log
 		}
@@ -265,11 +265,7 @@ func BuildKeyDir(path string) (KeyDir, error) {
 			// TODO: log
 		}
 		fileIDs = append(fileIDs, id)
-		dfs[id] = f.Name()
-		err = fd.Close()
-		if err != nil {
-			//TODO: log
-		}
+		dfs[id] = path
 	}
 
 	sort.SliceStable(fileIDs, func(l, r int) bool {
@@ -277,8 +273,8 @@ func BuildKeyDir(path string) (KeyDir, error) {
 	})
 
 	for _, fID := range fileIDs {
-		name := dfs[fID]
-		fd, err := os.OpenFile(filepath.Join(path, fmt.Sprint(name)), os.O_RDONLY, 0665)
+		filePath := dfs[fID]
+		fd, err := os.OpenFile(filePath, os.O_RDONLY, 0665)
 		if err != nil {
 			// TODO: log
 		}

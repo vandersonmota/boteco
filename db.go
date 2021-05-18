@@ -244,8 +244,12 @@ func BuildKeyDir(path string) (KeyDir, error) {
 		m: map[string]Item{},
 	}
 
-	dfs := map[uint64]string{}
-	fileIDs := []uint64{}
+	type DataFileMapping struct {
+		id   uint64
+		path string
+	}
+
+	fileMappings := []DataFileMapping{}
 	datafiles, err := ioutil.ReadDir(path)
 	if err != nil {
 		return kd, err
@@ -264,17 +268,15 @@ func BuildKeyDir(path string) (KeyDir, error) {
 			return kd, err
 			// TODO: log
 		}
-		fileIDs = append(fileIDs, id)
-		dfs[id] = path
+		fileMappings = append(fileMappings, DataFileMapping{id: id, path: path})
 	}
 
-	sort.SliceStable(fileIDs, func(l, r int) bool {
-		return fileIDs[l] < fileIDs[r]
+	sort.SliceStable(fileMappings, func(l, r int) bool {
+		return fileMappings[l].id < fileMappings[r].id
 	})
 
-	for _, fID := range fileIDs {
-		filePath := dfs[fID]
-		fd, err := os.OpenFile(filePath, os.O_RDONLY, 0665)
+	for _, mapping := range fileMappings {
+		fd, err := os.OpenFile(mapping.path, os.O_RDONLY, 0665)
 		if err != nil {
 			// TODO: log
 		}
@@ -320,7 +322,7 @@ func BuildKeyDir(path string) (KeyDir, error) {
 			key := string(keyBuf[:])
 
 			offset += size
-			kd.Set(key, offset, size, int(fID))
+			kd.Set(key, offset, size, int(mapping.id))
 		}
 		fd.Close()
 	}

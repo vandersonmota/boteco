@@ -239,20 +239,16 @@ func NewDataFile(path string, size int) (DataFile, error) {
 
 }
 
-func BuildKeyDir(path string) (KeyDir, error) {
-	kd := KeyDir{
-		m: map[string]Item{},
-	}
+type DataFileMapping struct {
+	id   uint64
+	path string
+}
 
-	type DataFileMapping struct {
-		id   uint64
-		path string
-	}
-
+func listFileMappings(path string) ([]DataFileMapping, error) {
 	fileMappings := []DataFileMapping{}
 	datafiles, err := ioutil.ReadDir(path)
 	if err != nil {
-		return kd, err
+		return fileMappings, err
 	}
 
 	// TODO strong candidate for paralellization
@@ -260,13 +256,12 @@ func BuildKeyDir(path string) (KeyDir, error) {
 
 		path := filepath.Join(path, fmt.Sprint(f.Name()))
 		if err != nil {
-			// TODO: log
+			return fileMappings, err
 		}
 
 		id, err := strconv.ParseUint(f.Name(), 10, 64)
 		if err != nil {
-			return kd, err
-			// TODO: log
+			return fileMappings, err
 		}
 		fileMappings = append(fileMappings, DataFileMapping{id: id, path: path})
 	}
@@ -274,6 +269,20 @@ func BuildKeyDir(path string) (KeyDir, error) {
 	sort.SliceStable(fileMappings, func(l, r int) bool {
 		return fileMappings[l].id < fileMappings[r].id
 	})
+
+	return fileMappings, nil
+}
+
+func BuildKeyDir(path string) (KeyDir, error) {
+	kd := KeyDir{
+		m: map[string]Item{},
+	}
+
+	fileMappings, err := listFileMappings(path)
+	if err != nil {
+		// Better error handling
+		return kd, err
+	}
 
 	for _, mapping := range fileMappings {
 		fd, err := os.OpenFile(mapping.path, os.O_RDONLY, 0665)

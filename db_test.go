@@ -98,7 +98,7 @@ func (suite *DBTestSuite) TestPutCloseAndGet() {
 	assert.Equal(t, []byte("12345"), val)
 
 }
-func (suite *DBTestSuite) TestPutWriteDatafileHeaders() {
+func (suite *DBTestSuite) TestWriteDatafileHeaders() {
 	t := suite.T()
 	mq, err := NewDB(config.Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
 	assert.Nil(t, err)

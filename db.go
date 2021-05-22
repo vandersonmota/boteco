@@ -131,13 +131,20 @@ func NewDataFile(path string, size int) (DataFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &datafile{
+	df := &datafile{
 		id:      fileName, // TODO: maybe uuids?
 		fd:      f,
 		offset:  0,
 		name:    path,
 		maxSize: size,
-	}, nil
+	}
+
+	_, err = df.WriteHeader(config.Version, size)
+	if err != nil {
+		return nil, err
+	}
+
+	return df, nil
 
 }
 
@@ -154,10 +161,6 @@ func NewDB(cfg config.Config) (*DB, error) {
 		return nil, err
 	}
 	df, err := NewDataFile(cfg.Datadir, cfg.MaxDataFileSize)
-	if err != nil {
-		return &DB{}, err
-	}
-	_, err = df.WriteHeader(config.Version, cfg.MaxDataFileSize)
 	if err != nil {
 		return &DB{}, err
 	}

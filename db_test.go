@@ -20,7 +20,7 @@ func (suite *DBTestSuite) SetupTest() {
 	os.RemoveAll(suite.Datadir)
 }
 func (suite *DBTestSuite) TearDownTest() {
-	//os.RemoveAll(suite.Datadir)
+	os.RemoveAll(suite.Datadir)
 }
 
 func (suite *DBTestSuite) TestPut() {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"github.com/vandersonmota/potatomq/config"
 )
 
 type DBTestSuite struct {
@@ -24,7 +25,7 @@ func (suite *DBTestSuite) TearDownTest() {
 
 func (suite *DBTestSuite) TestPut() {
 	t := suite.T()
-	mq, err := NewDB(Config{
+	mq, err := NewDB(config.Config{
 		Datadir: suite.Datadir,
 	})
 	assert.Nil(t, err)
@@ -35,7 +36,7 @@ func (suite *DBTestSuite) TestPut() {
 }
 func (suite *DBTestSuite) TestGet() {
 	t := suite.T()
-	mq, err := NewDB(Config{Datadir: suite.Datadir})
+	mq, err := NewDB(config.Config{Datadir: suite.Datadir})
 	assert.Nil(t, err)
 	err = mq.Put("foo", []byte("fooo"))
 	assert.Nil(t, err)
@@ -45,7 +46,7 @@ func (suite *DBTestSuite) TestGet() {
 }
 func (suite *DBTestSuite) TestGetMultiple() {
 	t := suite.T()
-	mq, err := NewDB(Config{Datadir: suite.Datadir})
+	mq, err := NewDB(config.Config{Datadir: suite.Datadir})
 	assert.Nil(t, err)
 	err = mq.Put("foo", []byte("fooo"))
 	assert.Nil(t, err)
@@ -62,7 +63,7 @@ func (suite *DBTestSuite) TestGetMultiple() {
 
 func (suite *DBTestSuite) TestGetMultipleDataFiles() {
 	t := suite.T()
-	mq, err := NewDB(Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
+	mq, err := NewDB(config.Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
 	assert.Nil(t, err)
 	err = mq.Put("foo", []byte("fooo"))
 	assert.Nil(t, err)
@@ -78,7 +79,7 @@ func (suite *DBTestSuite) TestGetMultipleDataFiles() {
 }
 func (suite *DBTestSuite) TestPutCloseAndGet() {
 	t := suite.T()
-	mq, err := NewDB(Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
+	mq, err := NewDB(config.Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
 	assert.Nil(t, err)
 	err = mq.Put("bar", []byte("12345"))
 	assert.Nil(t, err)
@@ -86,7 +87,7 @@ func (suite *DBTestSuite) TestPutCloseAndGet() {
 	err = mq.Shutdown()
 	assert.Nil(t, err)
 
-	mq, err = NewDB(Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
+	mq, err = NewDB(config.Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
 	assert.Nil(t, err)
 	val, err := mq.Get("bar")
 	assert.Nil(t, err)

@@ -2,102 +2,23 @@ package potatomq
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
-	"hash/crc32"
-	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"time"
+
+	"github.com/vandersonmota/potatomq/config"
+	"github.com/vandersonmota/potatomq/entries"
+	"github.com/vandersonmota/potatomq/keydir"
 )
-
-const (
-	keySize         = 4
-	valueSize       = 8
-	checksumSize    = 4
-	timestampSize   = 8
-	fileIDSize      = 8
-	entryHeaderSize = checksumSize + timestampSize + keySize + valueSize
-)
-
-type Item struct {
-	fileID int
-	offset int
-	size   int
-}
-
-type KeyDir struct {
-	m map[string]Item // TODO: not thread safe
-}
-
-func (kd *KeyDir) Get(key string) Item {
-	item, exists := kd.m[key]
-
-	if !exists {
-		return Item{}
-	}
-
-	return item
-}
-
-func (kd *KeyDir) Set(key string, offset, size, fileID int) {
-	kd.m[key] = Item{
-		fileID: fileID,
-		offset: offset - size, //Means file was just written, then offset moved
-		size:   size,
-	}
-}
-
-type EntryHeader struct {
-	checksum  uint32
-	tstamp    uint64
-	keySize   uint32
-	valueSize uint32
-}
-
-type Entry struct {
-	*EntryHeader
-	key   []byte
-	value []byte
-}
-
-func (e *Entry) Encode() (headers, key, value []byte) {
-	buffer := make([]byte, checksumSize+timestampSize+keySize+valueSize)
-	binary.BigEndian.PutUint32(buffer[:checksumSize], e.checksum)
-	binary.BigEndian.PutUint64(buffer[checksumSize:checksumSize+timestampSize], e.tstamp)
-	binary.BigEndian.PutUint32(buffer[checksumSize+timestampSize:checksumSize+timestampSize+keySize], e.keySize)
-	binary.BigEndian.PutUint32(buffer[checksumSize+timestampSize+keySize:checksumSize+timestampSize+keySize+valueSize], e.valueSize)
-	return buffer, e.key, e.value
-}
-
-func (e *Entry) Size() int {
-	return checksumSize + timestampSize + keySize + valueSize + len(e.key) + len(e.value)
-}
-
-func NewEntry(key string, value []byte) Entry {
-	k := []byte(key)
-	return Entry{
-		EntryHeader: &EntryHeader{
-			checksum:  crc32.ChecksumIEEE(value),
-			tstamp:    uint64(time.Now().UnixNano()),
-			keySize:   uint32(len(k)),
-			valueSize: uint32(len(value)),
-		},
-		key:   []byte(key),
-		value: value,
-	}
-}
 
 type DataFile interface {
 	Id() int
 	Name() string
 	Offset() int
-	Write(e *Entry) (int, error)
+	Write(e *entries.Entry) (int, error)
 	WriteHeader(version, size int) (int, error)
-	ReadEntry(string, Item) (Entry, error)
+	ReadEntry(string, keydir.Item) (entries.Entry, error)
 	Close() error
 }
 
@@ -121,7 +42,7 @@ func (d *datafile) Offset() int {
 	return d.offset
 }
 
-func (d *datafile) Write(entry *Entry) (int, error) {
+func (d *datafile) Write(entry *entries.Entry) (int, error) {
 	headers, key, value := entry.Encode()
 	bytesWritten := 0
 	n, err := d.fd.Write(headers)
@@ -169,58 +90,26 @@ func (d *datafile) WriteHeader(version, size int) (int, error) {
 	return bytesWritten, nil
 }
 
-func (d *datafile) ReadEntry(datadir string, item Item) (Entry, error) {
-	f, err := os.OpenFile(filepath.Join(datadir, fmt.Sprint(item.fileID)), os.O_RDONLY, 664)
+func (d *datafile) ReadEntry(datadir string, item keydir.Item) (entries.Entry, error) {
+	f, err := os.OpenFile(filepath.Join(datadir, fmt.Sprint(item.FileID)), os.O_RDONLY, 664)
 	defer f.Close()
 	if err != nil {
-		return Entry{}, err
+		return entries.Entry{}, err
 	}
-	buf := make([]byte, item.size)
-	_, err = f.ReadAt(buf, int64(item.offset))
+	buf := make([]byte, item.Size)
+	_, err = f.ReadAt(buf, int64(item.Offset))
 	if err != nil {
-		return Entry{}, err
+		return entries.Entry{}, err
 	}
-	e, err := RebuildEntry(buf)
+	e, err := entries.RebuildEntry(buf)
 	if err != nil {
-		return Entry{}, err
+		return entries.Entry{}, err
 	}
 	return e, nil
 }
 
 func (d *datafile) Close() error {
 	return d.fd.Close()
-}
-
-func RebuildEntry(buffer []byte) (Entry, error) {
-	// TODO: Add CRC check
-	keyLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize : checksumSize+timestampSize+keySize])
-	valueLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize+keySize : checksumSize+timestampSize+keySize+valueSize])
-	e := Entry{
-		EntryHeader: &EntryHeader{
-			checksum:  binary.BigEndian.Uint32(buffer[:checksumSize]),
-			tstamp:    binary.BigEndian.Uint64(buffer[checksumSize : checksumSize+timestampSize]),
-			keySize:   keyLength,
-			valueSize: valueLength,
-		},
-		key:   buffer[checksumSize+timestampSize+keySize+valueSize : checksumSize+timestampSize+keySize+valueSize+keyLength],
-		value: buffer[checksumSize+timestampSize+keySize+valueSize+keyLength : checksumSize+timestampSize+keySize+valueSize+keyLength+valueLength],
-	}
-
-	return e, nil
-
-}
-func RebuildHeaders(buffer []byte) (EntryHeader, error) {
-	keyLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize : checksumSize+timestampSize+keySize])
-	valueLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize+keySize : entryHeaderSize])
-	e := EntryHeader{
-		checksum:  binary.BigEndian.Uint32(buffer[:checksumSize]),
-		tstamp:    binary.BigEndian.Uint64(buffer[checksumSize : checksumSize+timestampSize]),
-		keySize:   keyLength,
-		valueSize: valueLength,
-	}
-
-	return e, nil
-
 }
 
 func NewDataFile(path string, size int) (DataFile, error) {
@@ -239,132 +128,14 @@ func NewDataFile(path string, size int) (DataFile, error) {
 
 }
 
-type EntryLocation struct {
-	key    string
-	offset int
-	size   int
-}
-
-type DataFileMapping struct {
-	id   uint64
-	path string
-}
-
-func (mapping *DataFileMapping) listEntriesLocation() ([]EntryLocation, error) {
-	entriesLocation := []EntryLocation{}
-	fd, err := os.OpenFile(mapping.path, os.O_RDONLY, 0665)
-	defer fd.Close()
-	if err != nil {
-		return entriesLocation, err
-	}
-	fileInfo, err := fd.Stat()
-	if err != nil {
-		return entriesLocation, err
-	}
-
-	if fileInfo.Size() < entryHeaderSize {
-		return entriesLocation, errors.New("Corrupted file")
-	}
-
-	offset := 0
-	for {
-		buf := make([]byte, entryHeaderSize)
-		_, err = fd.ReadAt(buf, int64(0))
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return entriesLocation, err
-		}
-		h, err := RebuildHeaders(buf)
-		if err != nil {
-			return entriesLocation, err
-		}
-
-		// need to readthe file sequentially, for all records
-		keyBuf := make([]byte, h.keySize)
-		_, err = fd.ReadAt(keyBuf, int64(offset+entryHeaderSize))
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return entriesLocation, err
-		}
-
-		// This is dangerous, need to normalize everything to an integer type
-		size := entryHeaderSize + int(h.keySize) + int(h.valueSize)
-		key := string(keyBuf[:])
-
-		offset += size
-		entriesLocation = append(entriesLocation, EntryLocation{key, offset, size})
-	}
-
-	return entriesLocation, nil
-}
-
-func listFileMappings(path string) ([]DataFileMapping, error) {
-	fileMappings := []DataFileMapping{}
-	datafiles, err := ioutil.ReadDir(path)
-	if err != nil {
-		return fileMappings, err
-	}
-
-	// TODO strong candidate for paralellization
-	for _, f := range datafiles {
-
-		path := filepath.Join(path, fmt.Sprint(f.Name()))
-		if err != nil {
-			return fileMappings, err
-		}
-
-		id, err := strconv.ParseUint(f.Name(), 10, 64)
-		if err != nil {
-			return fileMappings, err
-		}
-		fileMappings = append(fileMappings, DataFileMapping{id: id, path: path})
-	}
-
-	sort.SliceStable(fileMappings, func(l, r int) bool {
-		return fileMappings[l].id < fileMappings[r].id
-	})
-
-	return fileMappings, nil
-}
-
-func BuildKeyDir(path string) (KeyDir, error) {
-	kd := KeyDir{
-		m: map[string]Item{},
-	}
-
-	fileMappings, err := listFileMappings(path)
-	if err != nil {
-		// Better error handling
-		return kd, err
-	}
-
-	for _, mapping := range fileMappings {
-		locations, err := mapping.listEntriesLocation()
-		if err != nil {
-			// TODO: better error handling
-			return kd, nil
-		}
-		for _, location := range locations {
-			kd.Set(location.key, location.offset, location.size, int(mapping.id))
-		}
-	}
-
-	return kd, nil
-
-}
-
 type DB struct {
 	df      DataFile
-	kd      KeyDir
+	kd      keydir.KeyDir
 	datadir string
-	config  Config
+	config  config.Config
 }
 
-func NewDB(cfg Config) (*DB, error) {
+func NewDB(cfg config.Config) (*DB, error) {
 	err := os.MkdirAll(cfg.Datadir, 0755)
 	if err != nil {
 		return nil, err
@@ -373,11 +144,11 @@ func NewDB(cfg Config) (*DB, error) {
 	if err != nil {
 		return &DB{}, err
 	}
-	_, err = df.WriteHeader(Version, cfg.MaxDataFileSize)
+	_, err = df.WriteHeader(config.Version, cfg.MaxDataFileSize)
 	if err != nil {
 		return &DB{}, err
 	}
-	kd, err := BuildKeyDir(cfg.Datadir)
+	kd, err := keydir.BuildKeyDir(cfg.Datadir)
 	if err != nil {
 		return &DB{}, err
 	}
@@ -390,7 +161,7 @@ func NewDB(cfg Config) (*DB, error) {
 }
 
 func (mq *DB) Put(key string, value []byte) error {
-	e := NewEntry(key, value)
+	e := entries.NewEntry(key, value)
 	if (mq.df.Offset() + e.Size()) >= mq.config.MaxDataFileSize {
 		df, err := NewDataFile(mq.config.Datadir, mq.config.MaxDataFileSize)
 		if err != nil {
@@ -414,7 +185,7 @@ func (mq *DB) Get(key string) ([]byte, error) {
 		return make([]byte, 0), err
 	}
 
-	return entry.value, err
+	return entry.Value, err
 }
 
 func (mq *DB) Shutdown() error {

@@ -84,6 +84,10 @@ func (suite *DBTestSuite) TestPutCloseAndGet() {
 	err = mq.Put("bar", []byte("12345"))
 	assert.Nil(t, err)
 
+	size, err := mq.df.CurrentSize()
+	assert.Nil(t, err)
+	assert.Equal(t, size, int64(32)) // Size of file headers
+
 	err = mq.Shutdown()
 	assert.Nil(t, err)
 

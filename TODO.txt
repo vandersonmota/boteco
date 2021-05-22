@@ -3,3 +3,4 @@
 - Save db info in file headers
 - integers file ids.
 - suport keys other than strings
+- Respect the file size limit before writing

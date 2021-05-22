@@ -20,7 +20,7 @@ func (suite *DBTestSuite) SetupTest() {
 	os.RemoveAll(suite.Datadir)
 }
 func (suite *DBTestSuite) TearDownTest() {
-	os.RemoveAll(suite.Datadir)
+	//os.RemoveAll(suite.Datadir)
 }
 
 func (suite *DBTestSuite) TestPut() {
@@ -63,7 +63,7 @@ func (suite *DBTestSuite) TestGetMultiple() {
 
 func (suite *DBTestSuite) TestGetMultipleDataFiles() {
 	t := suite.T()
-	mq, err := NewDB(config.Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
+	mq, err := NewDB(config.Config{Datadir: suite.Datadir, MaxDataFileSize: 64})
 	assert.Nil(t, err)
 	err = mq.Put("foo", []byte("fooo"))
 	assert.Nil(t, err)
@@ -75,18 +75,18 @@ func (suite *DBTestSuite) TestGetMultipleDataFiles() {
 
 	files, _ := ioutil.ReadDir(suite.Datadir)
 
-	assert.Equal(t, 3, len(files))
+	assert.Equal(t, 2, len(files))
 }
 func (suite *DBTestSuite) TestPutCloseAndGet() {
 	t := suite.T()
-	mq, err := NewDB(config.Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
+	mq, err := NewDB(config.Config{Datadir: suite.Datadir, MaxDataFileSize: 60})
 	assert.Nil(t, err)
 	err = mq.Put("bar", []byte("12345"))
 	assert.Nil(t, err)
 
 	size, err := mq.df.CurrentSize()
 	assert.Nil(t, err)
-	assert.Equal(t, size, int64(32)) // Size of file headers
+	assert.Equal(t, size, int64(56)) // Size of file headers + record tuple
 
 	err = mq.Shutdown()
 	assert.Nil(t, err)
@@ -98,9 +98,10 @@ func (suite *DBTestSuite) TestPutCloseAndGet() {
 	assert.Equal(t, []byte("12345"), val)
 
 }
+
 func (suite *DBTestSuite) TestWriteDatafileHeaders() {
 	t := suite.T()
-	mq, err := NewDB(config.Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
+	mq, err := NewDB(config.Config{Datadir: suite.Datadir, MaxDataFileSize: 64})
 	assert.Nil(t, err)
 	size, err := mq.df.CurrentSize()
 

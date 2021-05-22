@@ -14,6 +14,8 @@ import (
 	"github.com/vandersonmota/potatomq/entries"
 )
 
+const fileHeaderSize = 24
+
 type Item struct {
 	FileID int
 	Offset int
@@ -65,14 +67,14 @@ func (mapping *DataFileMapping) listEntriesLocation() ([]EntryLocation, error) {
 		return entriesLocation, err
 	}
 
-	if fileInfo.Size() < config.EntryHeaderSize {
+	if fileInfo.Size() < fileHeaderSize {
 		return entriesLocation, errors.New("Corrupted file")
 	}
 
-	offset := 0
+	offset := fileHeaderSize
 	for {
 		buf := make([]byte, config.EntryHeaderSize)
-		_, err = fd.ReadAt(buf, int64(0))
+		_, err = fd.ReadAt(buf, int64(offset))
 		if err != nil {
 			if err == io.EOF {
 				break

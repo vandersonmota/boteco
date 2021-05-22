@@ -94,6 +94,20 @@ func (suite *DBTestSuite) TestPutCloseAndGet() {
 	assert.Equal(t, []byte("12345"), val)
 
 }
+func (suite *DBTestSuite) TestPutWriteDatafileHeaders() {
+	t := suite.T()
+	mq, err := NewDB(config.Config{Datadir: suite.Datadir, MaxDataFileSize: 30})
+	assert.Nil(t, err)
+	size, err := mq.df.CurrentSize()
+
+	assert.Nil(t, err)
+	assert.Equal(t, size, int64(24)) // Size of file headers
+
+	err = mq.Shutdown()
+	assert.Nil(t, err)
+
+}
+
 func TestDBTestSuite(t *testing.T) {
 	suite.Run(t, new(DBTestSuite))
 }

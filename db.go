@@ -21,6 +21,7 @@ type DataFile interface {
 	WriteHeader(version, size int) (int, error)
 	ReadEntry(string, keydir.Item) (entries.Entry, error)
 	Close() error
+	CurrentSize() (int64, error)
 }
 
 type datafile struct {
@@ -41,6 +42,14 @@ func (d *datafile) Name() string {
 
 func (d *datafile) Offset() int {
 	return d.offset
+}
+
+func (d *datafile) CurrentSize() (int64, error) {
+	info, err := d.fd.Stat()
+	if err != nil {
+		return 0, errors.New("Could not stat datafile file descriptor")
+	}
+	return info.Size(), nil
 }
 
 func (d *datafile) Write(entry *entries.Entry) (int, error) {

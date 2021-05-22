@@ -2,6 +2,7 @@ package potatomq
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -74,7 +75,8 @@ func (d *datafile) Write(entry *entries.Entry) (int, error) {
  system (32 and 64 bits)
 */
 func (d *datafile) WriteHeader(version, size int) (int, error) {
-	buffer := make([]byte, 24) // 64 bit is assumed
+	headerSize := 24
+	buffer := make([]byte, headerSize) // 64 bit is assumed
 	binary.BigEndian.PutUint64(buffer[:8], uint64(time.Now().UnixNano()))
 	binary.BigEndian.PutUint64(buffer[8:16], uint64(version))
 	binary.BigEndian.PutUint64(buffer[16:], uint64(size))
@@ -83,6 +85,10 @@ func (d *datafile) WriteHeader(version, size int) (int, error) {
 		// TODO: log
 		return 0, err
 	}
+	if bytesWritten != headerSize {
+		return 0, errors.New("Error when writing file headers")
+	}
+
 	d.offset += bytesWritten
 
 	return bytesWritten, nil

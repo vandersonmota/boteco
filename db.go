@@ -78,13 +78,11 @@ func (d *datafile) WriteHeader(version, size int) (int, error) {
 	binary.BigEndian.PutUint64(buffer[:8], uint64(time.Now().UnixNano()))
 	binary.BigEndian.PutUint64(buffer[8:16], uint64(version))
 	binary.BigEndian.PutUint64(buffer[16:], uint64(size))
-	bytesWritten := 0
-	n, err := d.fd.Write(buffer)
+	bytesWritten, err := d.fd.Write(buffer)
 	if err != nil {
 		// TODO: log
 		return 0, err
 	}
-	bytesWritten += n
 	d.offset += bytesWritten
 
 	return bytesWritten, nil

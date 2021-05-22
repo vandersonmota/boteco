@@ -51,7 +51,7 @@ func (kd *KeyDir) Set(key string, offset, size, fileID int) {
 	}
 }
 
-type Header struct {
+type EntryHeader struct {
 	checksum  uint32
 	tstamp    uint64
 	keySize   uint32
@@ -59,7 +59,7 @@ type Header struct {
 }
 
 type Entry struct {
-	*Header
+	*EntryHeader
 	key   []byte
 	value []byte
 }
@@ -80,7 +80,7 @@ func (e *Entry) Size() int {
 func NewEntry(key string, value []byte) Entry {
 	k := []byte(key)
 	return Entry{
-		Header: &Header{
+		EntryHeader: &EntryHeader{
 			checksum:  crc32.ChecksumIEEE(value),
 			tstamp:    uint64(time.Now().UnixNano()),
 			keySize:   uint32(len(k)),
@@ -196,7 +196,7 @@ func RebuildEntry(buffer []byte) (Entry, error) {
 	keyLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize : checksumSize+timestampSize+keySize])
 	valueLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize+keySize : checksumSize+timestampSize+keySize+valueSize])
 	e := Entry{
-		Header: &Header{
+		EntryHeader: &EntryHeader{
 			checksum:  binary.BigEndian.Uint32(buffer[:checksumSize]),
 			tstamp:    binary.BigEndian.Uint64(buffer[checksumSize : checksumSize+timestampSize]),
 			keySize:   keyLength,
@@ -209,10 +209,10 @@ func RebuildEntry(buffer []byte) (Entry, error) {
 	return e, nil
 
 }
-func RebuildHeaders(buffer []byte) (Header, error) {
+func RebuildHeaders(buffer []byte) (EntryHeader, error) {
 	keyLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize : checksumSize+timestampSize+keySize])
 	valueLength := binary.BigEndian.Uint32(buffer[checksumSize+timestampSize+keySize : entryHeaderSize])
-	e := Header{
+	e := EntryHeader{
 		checksum:  binary.BigEndian.Uint32(buffer[:checksumSize]),
 		tstamp:    binary.BigEndian.Uint64(buffer[checksumSize : checksumSize+timestampSize]),
 		keySize:   keyLength,

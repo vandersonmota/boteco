@@ -2,5 +2,6 @@
 - Normalize integer types
 - integers file ids.
 - guarantee that a each tuple fits inside one file
-- 255 bytes out of UTF-8 characters as key size limit
 - 128 MB as max record size
+- Fuzz testing
+- More unit testing

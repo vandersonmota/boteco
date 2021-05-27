@@ -22,6 +22,10 @@ type Item struct {
 	Size   int
 }
 
+func (i *Item) IsEmpty() bool {
+	return *i == Item{}
+}
+
 type KeyDir struct {
 	m map[string]Item // TODO: not thread safe
 }

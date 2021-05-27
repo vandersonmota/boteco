@@ -37,7 +37,10 @@ func NewDB(cfg config.Config) (*DB, error) {
 }
 
 func (mq *DB) Put(key string, value []byte) error {
-	e := entries.NewEntry(key, value)
+	e, err := entries.NewEntry(key, value)
+	if err != nil {
+		return err
+	}
 	if (mq.df.Offset() + e.Size()) >= mq.config.MaxDataFileSize {
 		df, err := NewDataFile(mq.config.Datadir, mq.config.MaxDataFileSize)
 		if err != nil {
@@ -56,6 +59,9 @@ func (mq *DB) Put(key string, value []byte) error {
 
 func (mq *DB) Get(key string) ([]byte, error) {
 	item := mq.kd.Get(key)
+	if item.IsEmpty() {
+		return make([]byte, 0), nil
+	}
 	entry, err := mq.df.ReadEntry(mq.datadir, item)
 	if err != nil {
 		return make([]byte, 0), err

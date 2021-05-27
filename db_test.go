@@ -1,6 +1,7 @@
 package potatomq
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -59,6 +60,26 @@ func (suite *DBTestSuite) TestUTF8Keys() {
 	val, err = mq.Get("大")
 	assert.Nil(t, err)
 	assert.Equal(t, []byte("Heaven"), val)
+}
+func (suite *DBTestSuite) TestBigKeysNotAllowed() {
+	// limit is 255
+	bigKey := `
+	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+	uuuuuuuuuuuuuuuuuuuiiiiiiiiiiiiiiippppppppppppppooooo
+	pipipippipiipipipiipipipiipiipiippipipipipipipipiipip
+	`
+	fmt.Println(len(bigKey))
+	t := suite.T()
+	mq, err := NewDB(config.Config{Datadir: suite.Datadir})
+	assert.Nil(t, err)
+	err = mq.Put(bigKey, []byte("manjericão"))
+	assert.Error(t, err)
+	val, err := mq.Get(bigKey)
+	assert.Nil(t, err)
+	assert.Equal(t, make([]byte, 0), val)
 }
 func (suite *DBTestSuite) TestGetMultiple() {
 	t := suite.T()

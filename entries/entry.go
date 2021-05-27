@@ -2,6 +2,7 @@ package entries
 
 import (
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 	"time"
 
@@ -9,13 +10,24 @@ import (
 )
 
 const (
-	KeySize         = 4
-	ValueSize       = 8
-	ChecksumSize    = 4
-	TimestampSize   = 8
-	FileIDSize      = 8
-	EntryHeaderSize = ChecksumSize + TimestampSize + KeySize + ValueSize
+	KeySize                   = 4
+	ValueSize                 = 8
+	ChecksumSize              = 4
+	TimestampSize             = 8
+	FileIDSize                = 8
+	EntryHeaderSize           = ChecksumSize + TimestampSize + KeySize + ValueSize
+	MaxKeySize                = 255
+	EntryKeyOverflowErrorCode = 1
 )
+
+type Error struct {
+	err  string
+	code int
+}
+
+func (e *Error) Error() string {
+	return fmt.Sprintf("Error: %s - Code: %d", e.err, e.code)
+}
 
 type EntryHeader struct {
 	checksum  uint32
@@ -43,8 +55,11 @@ func (e *Entry) Size() int {
 	return ChecksumSize + TimestampSize + KeySize + ValueSize + len(e.Key) + len(e.Value)
 }
 
-func NewEntry(key string, value []byte) Entry {
+func NewEntry(key string, value []byte) (Entry, error) {
 	k := []byte(key)
+	if len(k) > MaxKeySize {
+		return Entry{}, &Error{err: "Key too large", code: EntryKeyOverflowErrorCode}
+	}
 	return Entry{
 		EntryHeader: &EntryHeader{
 			checksum:  crc32.ChecksumIEEE(value),
@@ -54,7 +69,7 @@ func NewEntry(key string, value []byte) Entry {
 		},
 		Key:   []byte(key),
 		Value: value,
-	}
+	}, nil
 }
 
 func RebuildHeaders(buffer []byte) (EntryHeader, error) {

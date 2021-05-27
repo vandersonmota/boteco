@@ -44,6 +44,22 @@ func (suite *DBTestSuite) TestGet() {
 	assert.Nil(t, err)
 	assert.Equal(t, []byte("fooo"), val)
 }
+func (suite *DBTestSuite) TestUTF8Keys() {
+	t := suite.T()
+	mq, err := NewDB(config.Config{Datadir: suite.Datadir})
+	assert.Nil(t, err)
+	err = mq.Put("cajá", []byte("manjericão"))
+	assert.Nil(t, err)
+	val, err := mq.Get("cajá")
+	assert.Nil(t, err)
+	assert.Equal(t, []byte("manjericão"), val)
+
+	err = mq.Put("大", []byte("Heaven"))
+	assert.Nil(t, err)
+	val, err = mq.Get("大")
+	assert.Nil(t, err)
+	assert.Equal(t, []byte("Heaven"), val)
+}
 func (suite *DBTestSuite) TestGetMultiple() {
 	t := suite.T()
 	mq, err := NewDB(config.Config{Datadir: suite.Datadir})

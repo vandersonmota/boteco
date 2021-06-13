@@ -9,17 +9,19 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"time"
 
-	"github.com/vandersonmota/potatomq/config"
-	"github.com/vandersonmota/potatomq/entries"
+	"github.com/vandersonmota/boteco/config"
+	"github.com/vandersonmota/boteco/entries"
 )
 
 const fileHeaderSize = 24
 
 type Item struct {
-	FileID int
-	Offset int
-	Size   int
+	FileID    int
+	Offset    int
+	Size      int
+	Timestamp int
 }
 
 func (i *Item) IsEmpty() bool {
@@ -42,9 +44,10 @@ func (kd *KeyDir) Get(key string) Item {
 
 func (kd *KeyDir) Set(key string, offset, size, fileID int) {
 	kd.m[key] = Item{
-		FileID: fileID,
-		Offset: offset - size, //Means file was just written, then offset moved
-		Size:   size,
+		FileID:    fileID,
+		Offset:    offset - size, //Means file was just written, then offset moved
+		Size:      size,
+		Timestamp: int(time.Now().UnixNano()),
 	}
 }
 

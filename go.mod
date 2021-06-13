@@ -1,4 +1,4 @@
-module github.com/vandersonmota/potatomq
+module github.com/vandersonmota/boteco
 
 go 1.15
 

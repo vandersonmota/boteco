@@ -1,4 +1,4 @@
-package potatomq
+package boteco
 
 import (
 	"encoding/binary"
@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/vandersonmota/potatomq/config"
-	"github.com/vandersonmota/potatomq/entries"
-	"github.com/vandersonmota/potatomq/keydir"
+	"github.com/vandersonmota/boteco/config"
+	"github.com/vandersonmota/boteco/entries"
+	"github.com/vandersonmota/boteco/keydir"
 )
 
 type DataFile interface {

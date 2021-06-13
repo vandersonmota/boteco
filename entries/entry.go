@@ -6,7 +6,7 @@ import (
 	"hash/crc32"
 	"time"
 
-	"github.com/vandersonmota/potatomq/config"
+	"github.com/vandersonmota/boteco/config"
 )
 
 const (

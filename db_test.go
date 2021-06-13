@@ -1,4 +1,4 @@
-package potatomq
+package boteco
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/vandersonmota/potatomq/config"
+	"github.com/vandersonmota/boteco/config"
 )
 
 type DBTestSuite struct {

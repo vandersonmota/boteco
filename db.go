@@ -1,11 +1,11 @@
-package potatomq
+package boteco
 
 import (
 	"os"
 
-	"github.com/vandersonmota/potatomq/config"
-	"github.com/vandersonmota/potatomq/entries"
-	"github.com/vandersonmota/potatomq/keydir"
+	"github.com/vandersonmota/boteco/config"
+	"github.com/vandersonmota/boteco/entries"
+	"github.com/vandersonmota/boteco/keydir"
 )
 
 type DB struct {

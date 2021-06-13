@@ -4,4 +4,6 @@
 - guarantee that a each tuple fits inside one file
 - 128 MB as max record size
 - Fuzz testing
+- add compaction
+- deletion
 - More unit testing
